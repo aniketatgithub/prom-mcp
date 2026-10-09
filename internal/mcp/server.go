@@ -98,9 +98,76 @@ func handle(req request, client *prom.Client) (response, bool) {
 	case "initialize":
 		base.Result = map[string]any{
 			"protocolVersion": "2024-11-05",
-			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "prom-mcp", "version": "0.1.0"},
+			"capabilities": map[string]any{
+				"tools":     map[string]any{},
+				"prompts":   map[string]any{},
+				"resources": map[string]any{},
+			},
+			"serverInfo": map[string]any{"name": "prom-mcp", "version": "0.2.0"},
 		}
+		return base, true
+	case "prompts/list":
+		base.Result = map[string]any{"prompts": []map[string]any{{
+			"name":        "triage",
+			"description": "Production triage workflow: check firing alerts, explain each with its rule, discover the relevant series, then query before concluding.",
+			"arguments": []map[string]any{
+				{"name": "service", "description": "Optional service or job name to focus on", "required": false},
+			},
+		}}}
+		return base, true
+	case "prompts/get":
+		var pp struct {
+			Name      string            `json:"name"`
+			Arguments map[string]string `json:"arguments"`
+		}
+		if err := json.Unmarshal(req.Params, &pp); err != nil || pp.Name != "triage" {
+			base.Error = &rpcError{Code: -32602, Message: "unknown prompt"}
+			return base, true
+		}
+		focus := "the whole system"
+		if s := pp.Arguments["service"]; s != "" {
+			focus = "service " + s
+		}
+		text := "You are triaging a production incident in " + focus + " using Prometheus tools.\n" +
+			"1. Call prom_alerts_explain to see what is firing, with rule expressions and annotations.\n" +
+			"2. For each critical alert, use prom_series_discover to confirm which series exist before querying.\n" +
+			"3. Use prom_query and prom_query_range to check current values and recent trend; use prom_label_values to learn real job and instance names.\n" +
+			"4. Summarize: what is firing, since when, likely blast radius, and the next concrete check. Do not invent metric names."
+		base.Result = map[string]any{"messages": []map[string]any{{
+			"role":    "user",
+			"content": map[string]any{"type": "text", "text": text},
+		}}}
+		return base, true
+	case "resources/list":
+		base.Result = map[string]any{"resources": []map[string]any{
+			{"uri": "prometheus://alerts", "name": "Active alerts explained", "mimeType": "text/plain"},
+			{"uri": "prometheus://config", "name": "prom-mcp connection config", "mimeType": "text/plain"},
+		}}
+		return base, true
+	case "resources/read":
+		var rp struct {
+			URI string `json:"uri"`
+		}
+		if err := json.Unmarshal(req.Params, &rp); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "invalid params"}
+			return base, true
+		}
+		var text string
+		var err error
+		switch rp.URI {
+		case "prometheus://alerts":
+			text, err = client.AlertsExplain(context.Background())
+		case "prometheus://config":
+			text = "base: " + client.Base + "\ntools: prom_query, prom_query_range, prom_alerts_explain, prom_label_values, prom_series_discover\n"
+		default:
+			base.Error = &rpcError{Code: -32602, Message: "unknown resource " + rp.URI}
+			return base, true
+		}
+		if err != nil {
+			base.Error = &rpcError{Code: -32603, Message: err.Error()}
+			return base, true
+		}
+		base.Result = map[string]any{"contents": []map[string]any{{"uri": rp.URI, "mimeType": "text/plain", "text": text}}}
 		return base, true
 	case "notifications/initialized", "notifications/cancelled":
 		return base, false
