@@ -54,13 +54,35 @@ Add to your MCP config (`~/.cursor/mcp.json` or equivalent):
 
 Then ask your agent things like: *"What is firing right now?"* · *"Why is NodeDown alerting?"* · *"Show me `up` for the node job."*
 
+## What it looks like
+
+Ask your agent *"why is the node down?"* and the alert tool answers in triage shape:
+
+```text
+1 active alert(s)
+
+[firing] NodeDown (since 2026-10-08T10:00:00Z, value 0)
+  labels: {alertname="NodeDown", instance="node1:9100", job="node", severity="critical"}
+  summary: Node node1:9100 is down
+  description: Scrapes failing for 5m
+  rule: up{job="node"} == 0
+  group: node.rules
+  for: 5m0s
+```
+
+Plus a built-in `triage` prompt template that walks the agent through alerts, discovery, and trend checks in order.
+
 ## Tools
 
 | Tool | What it does |
 | --- | --- |
-| `prom_query` | Runs an instant PromQL query and renders compact, labelled series and values. |
-| `prom_alerts_explain` | Lists active alerts joined with their alerting-rule expressions and annotations, ready for triage. |
+| `prom_query` | Instant PromQL query, rendered as compact labelled series and values. |
+| `prom_query_range` | Range query over the last N minutes; per-series points, first, last, min, max. |
+| `prom_alerts_explain` | Active alerts joined with alerting-rule expressions, rule group, `for` duration, and annotations. |
+| `prom_label_values` | Lists real values of a label (optionally scoped), so the agent learns actual job/instance names. |
 | `prom_series_discover` | Checks which series exist for a label matcher, so the agent stops hallucinating metric names. |
+
+Resources: `prometheus://alerts` (explained alerts), `prometheus://config`. Prompt: `triage`.
 
 ## Try it with no server
 
@@ -105,6 +127,15 @@ Yes. `prom_alerts_explain` joins active alerts with the rule that fired them (ex
 
 **Does prom-mcp need any API keys or cloud services?**
 No. It is a single local binary talking only to your Prometheus.
+
+**How is this different from exposing the Prometheus HTTP API to an agent?**
+Raw API access returns nested JSON the agent must parse and invites invented metric names. prom-mcp renders compact labelled text, joins alerts with the rules that fired them, caps long outputs, and nudges discovery before querying. It also retries transient failures and supports bearer-token auth.
+
+**Does it work with a remote or auth-protected Prometheus?**
+Yes: set `PROM_URL` and `PROM_TOKEN` (or a JSON config file). See Configuration.
+
+**Which Prometheus versions are supported?**
+Any server exposing the standard HTTP API (`/api/v1/query`, `query_range`, `alerts`, `rules`, `series`, `label/<name>/values`).
 
 ## License
 
