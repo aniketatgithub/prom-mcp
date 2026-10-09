@@ -45,6 +45,23 @@ var tools = []map[string]any{
 		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}},
 	},
 	{
+		"name":        "prom_query_range",
+		"description": "Run a range PromQL query over the last N minutes and summarize each series (points, first, last, min, max).",
+		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{
+			"query":   map[string]any{"type": "string", "description": "PromQL expression"},
+			"minutes": map[string]any{"type": "number", "description": "Lookback window in minutes (default 60)"},
+			"step":    map[string]any{"type": "string", "description": "Step like 60s or 5m (optional)"},
+		}, "required": []string{"query"}},
+	},
+	{
+		"name":        "prom_label_values",
+		"description": "List the values of one label, optionally scoped by a series matcher. Use to learn real job/instance names before querying.",
+		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{
+			"label": map[string]any{"type": "string", "description": "Label name, e.g. job"},
+			"match": map[string]any{"type": "string", "description": "Optional series selector, e.g. up"},
+		}, "required": []string{"label"}},
+	},
+	{
 		"name":        "prom_series_discover",
 		"description": "Discover which series exist for a label matcher, e.g. up{job=\"node\"}, before writing queries against them.",
 		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{
@@ -124,6 +141,24 @@ func Call(ctx context.Context, client *prom.Client, name string, args map[string
 			return "", fmt.Errorf("query is required")
 		}
 		return client.Query(ctx, q)
+	case "prom_query_range":
+		q, _ := args["query"].(string)
+		if q == "" {
+			return "", fmt.Errorf("query is required")
+		}
+		minutes := 60
+		if m, ok := args["minutes"].(float64); ok && m > 0 {
+			minutes = int(m)
+		}
+		step, _ := args["step"].(string)
+		return client.QueryRange(ctx, q, minutes, step)
+	case "prom_label_values":
+		l, _ := args["label"].(string)
+		if l == "" {
+			return "", fmt.Errorf("label is required")
+		}
+		m, _ := args["match"].(string)
+		return client.LabelValues(ctx, l, m)
 	case "prom_alerts_explain":
 		return client.AlertsExplain(ctx)
 	case "prom_series_discover":

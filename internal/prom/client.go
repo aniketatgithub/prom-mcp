@@ -203,6 +203,85 @@ func (c *Client) AlertsExplain(ctx context.Context) (string, error) {
 	return b.String(), nil
 }
 
+// QueryRange runs a range PromQL query. Step defaults to a sensible value
+// for the window when empty.
+func (c *Client) QueryRange(ctx context.Context, expr string, minutes int, step string) (string, error) {
+	if minutes <= 0 {
+		minutes = 60
+	}
+	end := time.Now()
+	start := end.Add(-time.Duration(minutes) * time.Minute)
+	if step == "" {
+		step = "60s"
+		if minutes > 360 {
+			step = "300s"
+		}
+	}
+	p := url.Values{
+		"query": {expr},
+		"start": {start.Format(time.RFC3339)},
+		"end":   {end.Format(time.RFC3339)},
+		"step":  {step},
+	}
+	data, err := c.get(ctx, "/api/v1/query_range", p)
+	if err != nil {
+		return "", err
+	}
+	var payload struct {
+		ResultType string `json:"resultType"`
+		Result     []struct {
+			Metric map[string]string `json:"metric"`
+			Values [][2]any          `json:"values"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "range query: %s (last %dm, step %s)\n%d series\n", expr, minutes, step, len(payload.Result))
+	for _, s := range payload.Result {
+		var first, last any
+		var min, max float64
+		for i, v := range s.Values {
+			if i == 0 {
+				first = v[1]
+			}
+			last = v[1]
+			var fv float64
+			fmt.Sscanf(fmt.Sprint(v[1]), "%g", &fv)
+			if i == 0 || fv < min {
+				min = fv
+			}
+			if i == 0 || fv > max {
+				max = fv
+			}
+		}
+		fmt.Fprintf(&b, "%s points=%d first=%v last=%v min=%g max=%g\n", formatLabels(s.Metric), len(s.Values), first, last, min, max)
+	}
+	return b.String(), nil
+}
+
+// LabelValues lists values of one label, optionally scoped by a series matcher.
+func (c *Client) LabelValues(ctx context.Context, label, match string) (string, error) {
+	p := url.Values{}
+	if match != "" {
+		p.Set("match[]", match)
+	}
+	data, err := c.get(ctx, "/api/v1/label/"+url.PathEscape(label)+"/values", p)
+	if err != nil {
+		return "", err
+	}
+	var values []string
+	if err := json.Unmarshal(data, &values); err != nil {
+		return "", err
+	}
+	scope := ""
+	if match != "" {
+		scope = " for " + match
+	}
+	return fmt.Sprintf("label %s%s: %d value(s)\n%s\n", label, scope, len(values), strings.Join(values, ", ")), nil
+}
+
 // Series discovers series matching a label matcher (e.g. up{job="node"}).
 func (c *Client) Series(ctx context.Context, match string) (string, error) {
 	p := url.Values{"match[]": {match}}
@@ -216,7 +295,12 @@ func (c *Client) Series(ctx context.Context, match string) (string, error) {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d series match %s\n", len(series), match)
-	for _, s := range series {
+	const cap = 100
+	for i, s := range series {
+		if i >= cap {
+			fmt.Fprintf(&b, "... and %d more (refine the matcher)\n", len(series)-cap)
+			break
+		}
 		fmt.Fprintf(&b, "%s\n", formatLabels(s))
 	}
 	return b.String(), nil
