@@ -13,10 +13,17 @@ import (
 	"time"
 )
 
+const (
+	defaultTimeout  = 15 * time.Second
+	maxResponseBody = 16 << 20 // 16 MiB cap on Prometheus responses
+	maxAttempts     = 3
+)
+
 // Client talks to one Prometheus server.
 type Client struct {
-	Base string
-	HTTP *http.Client
+	Base  string
+	HTTP  *http.Client
+	Token string // optional bearer token, sent as Authorization header
 }
 
 // New builds a Client. Empty base defaults to http://localhost:9090.
@@ -24,41 +31,80 @@ func New(base string) *Client {
 	if base == "" {
 		base = "http://localhost:9090"
 	}
-	return &Client{Base: strings.TrimRight(base, "/"), HTTP: &http.Client{Timeout: 10 * time.Second}}
+	return &Client{Base: strings.TrimRight(base, "/"), HTTP: &http.Client{Timeout: defaultTimeout}}
 }
 
 type apiResponse struct {
-	Status string          `json:"status"`
-	Data   json.RawMessage `json:"data"`
-	Error  string          `json:"error"`
+	Status    string          `json:"status"`
+	Data      json.RawMessage `json:"data"`
+	Error     string          `json:"error"`
+	ErrorType string          `json:"errorType"`
 }
 
+// get performs one API call with bounded retries on transient failures
+// (network errors and HTTP 5xx). Client errors (4xx) fail immediately.
 func (c *Client) get(ctx context.Context, path string, params url.Values) (json.RawMessage, error) {
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		data, retryable, err := c.getOnce(ctx, path, params)
+		if err == nil {
+			return data, nil
+		}
+		lastErr = err
+		if !retryable || attempt == maxAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Duration(attempt) * 200 * time.Millisecond):
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *Client) getOnce(ctx context.Context, path string, params url.Values) (json.RawMessage, bool, error) {
 	u := c.Base + path
 	if len(params) > 0 {
 		u += "?" + params.Encode()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("prometheus unreachable at %s: %w", c.Base, err)
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
+		}
+		return nil, true, fmt.Errorf("prometheus unreachable at %s: %w", c.Base, err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
-		return nil, err
+		return nil, true, fmt.Errorf("reading response from %s: %w", u, err)
+	}
+	if resp.StatusCode >= 500 {
+		return nil, true, fmt.Errorf("prometheus at %s returned HTTP %d", c.Base, resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("prometheus at %s returned HTTP %d: %s", c.Base, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var ar apiResponse
 	if err := json.Unmarshal(body, &ar); err != nil {
-		return nil, fmt.Errorf("bad response from %s (HTTP %d)", u, resp.StatusCode)
+		return nil, false, fmt.Errorf("bad response from %s (HTTP %d)", u, resp.StatusCode)
 	}
 	if ar.Status != "success" {
-		return nil, fmt.Errorf("prometheus error: %s", ar.Error)
+		msg := ar.Error
+		if ar.ErrorType != "" {
+			msg = ar.ErrorType + ": " + msg
+		}
+		return nil, false, fmt.Errorf("prometheus error: %s", msg)
 	}
-	return ar.Data, nil
+	return ar.Data, false, nil
 }
 
 // Sample is one instant-query result.
