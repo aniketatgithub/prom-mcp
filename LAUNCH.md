@@ -1,5 +1,10 @@
 # Launch plan (local notes)
 
+## LIVE 2026-10-09
+- Repo: https://github.com/aniketatgithub/prom-mcp (public, topics set)
+- Release: https://github.com/aniketatgithub/prom-mcp/releases/tag/v0.1.0
+- Distribution drafts held in `distribution/` (awesome-mcp-servers + modelcontextprotocol/servers entries); submit after demo GIF lands in README.
+
 ## Concept and why it wins
 - Agent infrastructure is the 2026 breakout lane (GitHub search: ~79k mcp-topic repos and ~83k claude-code repos created this year).
 - Prometheus is the #1 observability backend and Aniket has domain depth + live Prometheus OSS PRs, which the MCP lane rewards (codebase-memory-mcp reached 46k stars on domain depth).
