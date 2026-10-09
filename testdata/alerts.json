@@ -1,0 +1,1 @@
+{"data":{"alerts":[{"activeAt":"2026-10-08T10:00:00Z","annotations":{"description":"Scrapes failing for 5m","summary":"Node node1:9100 is down"},"labels":{"alertname":"NodeDown","instance":"node1:9100","job":"node","severity":"critical"},"state":"firing","value":"0e+00"}]},"status":"success"}

@@ -1,0 +1,1 @@
+{"data":{"groups":[{"name":"node.rules","rules":[{"annotations":{"summary":"Node {{$labels.instance}} is down"},"duration":300,"labels":{"severity":"critical"},"name":"NodeDown","query":"up{job=\"node\"} == 0","type":"alerting"}]}]},"status":"success"}
