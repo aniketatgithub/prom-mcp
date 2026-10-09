@@ -3,12 +3,13 @@
 [![CI](https://github.com/aniketatgithub/prom-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/aniketatgithub/prom-mcp/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/go-1.23%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-blueviolet)](https://registry.modelcontextprotocol.io/v0.1/servers?search=prom-mcp)
 
 **prom-mcp is a Prometheus MCP server (Model Context Protocol) that gives AI agents production-grade eyes on your metrics.** Connect Claude Code, Cursor, or any MCP client to Prometheus and let the agent run PromQL queries, explain firing alerts with their rule definitions, and discover which series actually exist before querying — so it investigates instead of guessing.
 
 Built by a production engineer who works on-call, so the output reads like a triage note, not a raw JSON dump.
 
-<!-- Demo GIF: agent asks "why is node down?" -> prom_alerts_explain answers with the firing rule, labels, and annotations. -->
+![prom-mcp demo: agent asks why a node is down, prom-mcp explains the firing alert with its rule, then checks up{job="node"}](docs/demo.gif)
 
 ## Install
 
