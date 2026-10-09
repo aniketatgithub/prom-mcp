@@ -145,12 +145,20 @@ type Alert struct {
 }
 
 type ruleGroup struct {
+	Name  string `json:"name"`
 	Rules []struct {
 		Name        string            `json:"name"`
 		Query       string            `json:"query"`
 		Type        string            `json:"type"`
+		Duration    float64           `json:"duration"`
 		Annotations map[string]string `json:"annotations"`
 	} `json:"rules"`
+}
+
+type ruleInfo struct {
+	Query   string
+	Group   string
+	ForSecs float64
 }
 
 // AlertsExplain fetches active alerts and joins them with rule definitions,
@@ -166,7 +174,7 @@ func (c *Client) AlertsExplain(ctx context.Context) (string, error) {
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return "", err
 	}
-	rules := map[string]string{}
+	rules := map[string]ruleInfo{}
 	if rdata, err := c.get(ctx, "/api/v1/rules", nil); err == nil {
 		var rp struct {
 			Groups []ruleGroup `json:"groups"`
@@ -175,7 +183,7 @@ func (c *Client) AlertsExplain(ctx context.Context) (string, error) {
 			for _, g := range rp.Groups {
 				for _, r := range g.Rules {
 					if r.Type == "alerting" {
-						rules[r.Name] = r.Query
+						rules[r.Name] = ruleInfo{Query: r.Query, Group: g.Name, ForSecs: r.Duration}
 					}
 				}
 			}
@@ -196,8 +204,24 @@ func (c *Client) AlertsExplain(ctx context.Context) (string, error) {
 		if d := a.Annotations["description"]; d != "" {
 			fmt.Fprintf(&b, "  description: %s\n", d)
 		}
-		if q, ok := rules[name]; ok {
-			fmt.Fprintf(&b, "  rule: %s\n", q)
+		if ri, ok := rules[name]; ok {
+			fmt.Fprintf(&b, "  rule: %s\n", ri.Query)
+			if ri.Group != "" {
+				fmt.Fprintf(&b, "  group: %s\n", ri.Group)
+			}
+			if ri.ForSecs > 0 {
+				fmt.Fprintf(&b, "  for: %s\n", (time.Duration(ri.ForSecs) * time.Second).String())
+			}
+		}
+		extra := []string{}
+		for k, v := range a.Annotations {
+			if k != "summary" && k != "description" && v != "" {
+				extra = append(extra, k+"="+v)
+			}
+		}
+		sort.Strings(extra)
+		for _, e := range extra {
+			fmt.Fprintf(&b, "  annotation %s\n", e)
 		}
 	}
 	return b.String(), nil
