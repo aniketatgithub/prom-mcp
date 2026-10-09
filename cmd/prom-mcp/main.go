@@ -21,8 +21,7 @@ import (
 )
 
 func main() {
-	base := os.Getenv("PROM_URL")
-	client := prom.New(base)
+	client := prom.LoadConfig().Client()
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {

@@ -69,6 +69,23 @@ prom-mcp demo        # fixture-backed self-test of all three tools
 prom-mcp query 'up'  # one-shot CLI query against $PROM_URL
 ```
 
+## Configuration
+
+| Setting | Env var | Config file key |
+| --- | --- | --- |
+| Prometheus base URL | `PROM_URL` | `base_url` |
+| Bearer token (auth-protected Prometheus) | `PROM_TOKEN` | `token` |
+| Request timeout | `PROM_TIMEOUT` (e.g. `30s`) | `timeout_seconds` |
+| Config file path | `PROM_CONFIG` | |
+
+Config file is JSON, looked up at `$PROM_CONFIG`, then `./prom-mcp.json`, then `~/.prom-mcp.json`:
+
+```json
+{ "base_url": "https://prometheus.example.com", "token": "…", "timeout_seconds": 30 }
+```
+
+Env vars override the file. No config at all defaults to `http://localhost:9090`.
+
 ## Why not just give the agent raw API access?
 
 Agents drown in raw Prometheus JSON and invent metric names that do not exist. prom-mcp returns terse, labelled, triage-shaped text and makes the agent discover before querying. That is the difference between an agent that guesses and an agent that investigates.
