@@ -1,0 +1,10 @@
+# Demo stack: Prometheus scraping itself, plus prom-mcp wired as an MCP server.
+# 1) docker compose up -d
+# 2) PROM_URL=http://localhost:9090 prom-mcp demo   (fixture self-test)
+# 3) claude mcp add prom -- prom-mcp                (agent against the demo Prometheus)
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml

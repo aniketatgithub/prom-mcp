@@ -1,0 +1,1 @@
+{"servers":{"prom":{"command":"prom-mcp","env":{"PROM_URL":"http://localhost:9090"}}}}
