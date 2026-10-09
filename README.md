@@ -9,36 +9,36 @@
 
 Built by a production engineer who works on-call, so the output reads like a triage note, not a raw JSON dump.
 
+**5 tools • 2 resources • 1 triage prompt • single Go binary • zero dependencies • stdio**
+
 ![prom-mcp demo: agent asks why a node is down, prom-mcp explains the firing alert with its rule, then checks up{job="node"}](docs/demo.gif)
 
 ## Install
 
-```bash
-go install github.com/aniketatgithub/prom-mcp@latest
-```
+### Claude Desktop (MCPB, no toolchain needed)
 
-Or build from source:
+Download the bundle for your platform, then open it or drag it into Claude Desktop (Settings → Extensions). You will be asked for your Prometheus URL, which defaults to `http://localhost:9090`.
 
-```bash
-git clone https://github.com/aniketatgithub/prom-mcp && cd prom-mcp
-go build -o prom-mcp ./cmd/prom-mcp
-```
-
-## Quick start
-
-```bash
-export PROM_URL=http://localhost:9090   # your Prometheus (default if unset)
-```
+| Platform | MCPB bundle |
+| --- | --- |
+| macOS (Apple silicon) | [prom-mcp_v0.2.0_darwin_arm64.mcpb](https://github.com/aniketatgithub/prom-mcp/releases/download/v0.2.0/prom-mcp_v0.2.0_darwin_arm64.mcpb) |
+| macOS (Intel) | [prom-mcp_v0.2.0_darwin_amd64.mcpb](https://github.com/aniketatgithub/prom-mcp/releases/download/v0.2.0/prom-mcp_v0.2.0_darwin_amd64.mcpb) |
+| Linux (x86_64) | [prom-mcp_v0.2.0_linux_amd64.mcpb](https://github.com/aniketatgithub/prom-mcp/releases/download/v0.2.0/prom-mcp_v0.2.0_linux_amd64.mcpb) |
+| Linux (arm64) | [prom-mcp_v0.2.0_linux_arm64.mcpb](https://github.com/aniketatgithub/prom-mcp/releases/download/v0.2.0/prom-mcp_v0.2.0_linux_arm64.mcpb) |
 
 ### Claude Code
+
+With the binary on your `PATH` (release download or `go install`, see below):
 
 ```bash
 claude mcp add prom -- prom-mcp
 ```
 
-### Cursor (and other MCP clients)
+Set `PROM_URL` in your shell first if your Prometheus is not at `http://localhost:9090`, or pass `--env PROM_URL=...` to the command. More variants in [examples/claude-code.md](examples/claude-code.md).
 
-Add to your MCP config (`~/.cursor/mcp.json` or equivalent):
+### Cursor
+
+Add to `~/.cursor/mcp.json` (same file as [examples/cursor-mcp.json](examples/cursor-mcp.json)):
 
 ```json
 {
@@ -53,7 +53,57 @@ Add to your MCP config (`~/.cursor/mcp.json` or equivalent):
 }
 ```
 
-Then ask your agent things like: *"What is firing right now?"* · *"Why is NodeDown alerting?"* · *"Show me `up` for the node job."*
+### VS Code
+
+Add to `.vscode/mcp.json` (same file as [examples/vscode-mcp.json](examples/vscode-mcp.json)):
+
+```json
+{
+  "servers": {
+    "prom": {
+      "command": "prom-mcp",
+      "env": {
+        "PROM_URL": "http://localhost:9090"
+      }
+    }
+  }
+}
+```
+
+### Go install / build from source
+
+```bash
+go install github.com/aniketatgithub/prom-mcp@latest
+```
+
+```bash
+git clone https://github.com/aniketatgithub/prom-mcp && cd prom-mcp
+go build -o prom-mcp ./cmd/prom-mcp
+```
+
+Plain binaries for all four platforms are also on the [v0.2.0 release](https://github.com/aniketatgithub/prom-mcp/releases/tag/v0.2.0), next to the MCPB bundles above.
+
+## What to ask
+
+| You ask | prom-mcp does |
+| --- | --- |
+| "Why is NodeDown firing?" | `prom_alerts_explain` returns the active alert joined with its rule expression, group, `for`, labels, and annotations. |
+| "What jobs and instances actually exist?" | `prom_series_discover` and `prom_label_values` list real series and label values before any query is written. |
+| "Is this getting worse?" | `prom_query_range` summarizes the window per series: points, first, last, min, max. |
+
+## See it in action
+
+**Alert triage: why is the node down?**
+
+![prom-mcp alert triage demo](docs/demo.gif)
+
+**Discover what exists before querying:**
+
+![prom-mcp discovery demo: series discovery and label values for the node job](docs/demo-discover.gif)
+
+**Check the trend: is node1 getting worse?**
+
+![prom-mcp range query demo: up for the node job over the last 5 minutes](docs/demo-range.gif)
 
 ## What it looks like
 
@@ -88,7 +138,7 @@ Resources: `prometheus://alerts` (explained alerts), `prometheus://config`. Prom
 ## Try it with no server
 
 ```bash
-prom-mcp demo        # fixture-backed self-test of all three tools
+prom-mcp demo        # fixture-backed self-test: query, alert explanation, series discovery
 prom-mcp query 'up'  # one-shot CLI query against $PROM_URL
 ```
 
@@ -115,6 +165,8 @@ Agents drown in raw Prometheus JSON and invent metric names that do not exist. p
 
 Single Go binary, zero dependencies, works fully offline against your own Prometheus.
 
+Comparing servers? See [docs/comparison.md](docs/comparison.md) for an honest side-by-side with pab1it0/prometheus-mcp-server and the Prometheus org's prometheus/prometheus-mcp.
+
 ## FAQ
 
 **Which AI clients work with prom-mcp?**
@@ -128,6 +180,9 @@ Yes. `prom_alerts_explain` joins active alerts with the rule that fired them (ex
 
 **Does prom-mcp need any API keys or cloud services?**
 No. It is a single local binary talking only to your Prometheus.
+
+**How does prom-mcp compare to the other Prometheus MCP servers?**
+See [docs/comparison.md](docs/comparison.md). Short version: prom-mcp is the focused alert-triage option with 5 tools; the others cover more of the Prometheus API or ship more deployment machinery.
 
 **How is this different from exposing the Prometheus HTTP API to an agent?**
 Raw API access returns nested JSON the agent must parse and invites invented metric names. prom-mcp renders compact labelled text, joins alerts with the rules that fired them, caps long outputs, and nudges discovery before querying. It also retries transient failures and supports bearer-token auth.
