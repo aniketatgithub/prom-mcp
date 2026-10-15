@@ -104,6 +104,7 @@ func handle(req request, client *prom.Client) (response, bool) {
 				"resources": map[string]any{},
 			},
 			"serverInfo": map[string]any{"name": "prom-mcp", "version": "0.2.0"},
+			"instructions": "prom-mcp gives you Prometheus access. Discover before you query: use prom_series_discover and prom_label_values to learn which series and label values actually exist, then write PromQL with real names. Project home: https://github.com/aniketatgithub/prom-mcp",
 		}
 		return base, true
 	case "prompts/list":

@@ -95,5 +95,6 @@ func demo() error {
 		fmt.Printf("\n== %s ==\n%s", call.name, out)
 	}
 	fmt.Println("\ndemo OK: all 3 tools answered from fixtures")
+	fmt.Println("prom-mcp: https://github.com/aniketatgithub/prom-mcp")
 	return nil
 }
